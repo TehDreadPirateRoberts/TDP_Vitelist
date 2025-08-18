@@ -104,32 +104,50 @@ public class VlistCommand implements SimpleCommand {
                     source.sendMessage(Component.text(Main.getPrefix() + "§cYou don't have permission to use this command"));
                     return;
                 }
+                int page = 1;
+                if (args.length > 1) {
+                    try {
+                        page = Integer.parseInt(args[1]);
+                    } catch (NumberFormatException e) {
+                        source.sendMessage(Component.text(Main.getPrefix() + "§cInvalid page number."));
+                        return;
+                    }
+                }
+
+                final int finalPage = page;
                 CompletableFuture.runAsync(() -> {
                     try {
                         List<String> uuids = getWhitelistedUuids();
-                        if (!uuids.isEmpty()) {
-                            List<String> playerNames = new ArrayList<>();
-                            for (String uuid : uuids) {
-                                String playerName = getNameFromUUID(uuid);
-                                if (playerName != null) {
-                                    playerNames.add(playerName);
-                                }
-                            }
-                            if (!playerNames.isEmpty()) {
-                                String playerNameList = String.join(", ", playerNames);
-                                source.sendMessage(Component.text("§8----- [ §d§lVitelisted players §8] -----"));
-                                source.sendMessage(Component.text(""));
-                                for (String player : playerNames) {
-                                    source.sendMessage(Component.text("§7" + player));
-                                }
-                                source.sendMessage(Component.text(""));
-                                source.sendMessage(Component.text("§8--------------------------------"));
-                            } else {
-                                source.sendMessage(Component.text(Main.getPrefix() + "§7No players are currently vitelisted"));
-                            }
-                        } else {
-                            source.sendMessage(Component.text(Main.getPrefix() + "§7No UUIDs are currently vitelisted"));
+                        if (uuids.isEmpty()) {
+                            source.sendMessage(Component.text(Main.getPrefix() + "§7No players are currently vitelisted."));
+                            return;
                         }
+
+                        int playersPerPage = 10;
+                        int totalPages = (int) Math.ceil((double) uuids.size() / playersPerPage);
+
+                        if (finalPage < 1 || finalPage > totalPages) {
+                            source.sendMessage(Component.text(Main.getPrefix() + "§cInvalid page number. Page must be between 1 and " + totalPages));
+                            return;
+                        }
+
+                        int startIndex = (finalPage - 1) * playersPerPage;
+                        int endIndex = Math.min(startIndex + playersPerPage, uuids.size());
+                        List<String> pageUuids = uuids.subList(startIndex, endIndex);
+
+                        List<String> playerNames = new ArrayList<>();
+                        for (String uuid : pageUuids) {
+                            playerNames.add(getNameFromUUID(uuid));
+                        }
+
+                        source.sendMessage(Component.text("§8----- [ §d§lVitelisted players §7(Page " + finalPage + "/" + totalPages + ") §8] -----"));
+                        source.sendMessage(Component.text(""));
+                        for (String player : playerNames) {
+                            source.sendMessage(Component.text("§7" + player));
+                        }
+                        source.sendMessage(Component.text(""));
+                        source.sendMessage(Component.text("§8--------------------------------"));
+
                     } catch (Exception e) {
                         plugin.getLogger().error("Error in 'list' command", e);
                         source.sendMessage(Component.text(Main.getPrefix() + "§cAn error occurred while processing the command: " + e.getMessage()));
@@ -147,13 +165,28 @@ public class VlistCommand implements SimpleCommand {
     }
 
     private String getNameFromUUID(String uuid) {
+        if (!isValidUUID(uuid)) {
+            plugin.getLogger().warn("Invalid UUID format in whitelist: " + uuid);
+            return "Invalid UUID";
+        }
         try {
             URL url = new URL("https://playerdb.co/api/player/minecraft/" + uuid);
-            return getPlayerNameFromAPI(url);
+            String playerName = getPlayerNameFromAPI(url);
+            if (playerName == null) {
+                return "§c" + uuid + " (ERROR)";
+            }
+            return playerName;
         } catch (Exception e) {
-            e.printStackTrace();
+            plugin.getLogger().error("Failed to get player name for UUID: " + uuid, e);
+            return "§c" + uuid + " (ERROR)";
         }
-        return null;
+    }
+
+    private boolean isValidUUID(String uuid) {
+        if (uuid == null) {
+            return false;
+        }
+        return uuid.matches("[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}");
     }
 
     public static String getUUID(String name) {
@@ -171,6 +204,12 @@ public class VlistCommand implements SimpleCommand {
         conn.setRequestMethod("GET");
         conn.connect();
         int responseCode = conn.getResponseCode();
+        if (responseCode == 400) {
+            return null;
+        }
+        if (responseCode == 400) {
+            return null;
+        }
         if (responseCode != 200) {
             throw new RuntimeException("HttpResponseCode: " + responseCode);
         } else {
