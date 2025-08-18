@@ -30,17 +30,17 @@ public class VlistCommand implements SimpleCommand {
         CommandSource source = invocation.source();
         String[] args = invocation.arguments();
 
-        if (!source.hasPermission("vitelist.*")) {
+        if (!source.hasPermission("vitelist.*") && !source.hasPermission("vitelist.user")) {
             source.sendMessage(Component.text(Main.getPrefix() + "§cYou don't have permission to use this command"));
             return;
         }
         if (args.length < 1) {
-            source.sendMessage(Component.text(Main.getPrefix() + "§cInvalid usage"));
+            source.sendMessage(Component.text(Main.getPrefix() + "§cInvalid Usage! Available commands: add, remove, on, off, list"));
             return;
         }
         switch (args[0].toLowerCase()) {
             case "add":
-                if (!source.hasPermission("vitelist.add")) {
+                if (!source.hasPermission("vitelist.add") && !source.hasPermission("vitelist.*")) {
                     source.sendMessage(Component.text(Main.getPrefix() + "§cYou don't have permission to use this command"));
                     return;
                 }
@@ -62,7 +62,7 @@ public class VlistCommand implements SimpleCommand {
                 });
                 break;
             case "remove":
-                if (!source.hasPermission("vitelist.remove")) {
+                if (!source.hasPermission("vitelist.remove") && !source.hasPermission("vitelist.*")) {
                     source.sendMessage(Component.text(Main.getPrefix() + "§cYou don't have permission to use this command"));
                     return;
                 }
@@ -84,7 +84,7 @@ public class VlistCommand implements SimpleCommand {
                 });
                 break;
             case "on":
-                if (!source.hasPermission("vitelist.on")) {
+                if (!source.hasPermission("vitelist.list") && !source.hasPermission("vitelist.*")) {
                     source.sendMessage(Component.text(Main.getPrefix() + "§cYou don't have permission to use this command"));
                     return;
                 }
@@ -92,7 +92,7 @@ public class VlistCommand implements SimpleCommand {
                 source.sendMessage(Component.text(Main.getPrefix() + "§7Vitelist enabled"));
                 break;
             case "off":
-                if (!source.hasPermission("vitelist.off")) {
+                if (!source.hasPermission("vitelist.off") && !source.hasPermission("vitelist.*")) {
                     source.sendMessage(Component.text(Main.getPrefix() + "§cYou don't have permission to use this command"));
                     return;
                 }
@@ -100,7 +100,7 @@ public class VlistCommand implements SimpleCommand {
                 source.sendMessage(Component.text(Main.getPrefix() + "§7Vitelist disabled"));
                 break;
             case "list":
-                if (!source.hasPermission("vitelist.list")) {
+                if (!source.hasPermission("vitelist.on") && !source.hasPermission("vitelist.*")) {
                     source.sendMessage(Component.text(Main.getPrefix() + "§cYou don't have permission to use this command"));
                     return;
                 }
@@ -131,6 +131,7 @@ public class VlistCommand implements SimpleCommand {
                             source.sendMessage(Component.text(Main.getPrefix() + "§7No UUIDs are currently vitelisted"));
                         }
                     } catch (Exception e) {
+                        plugin.getLogger().error("Error in 'list' command", e);
                         source.sendMessage(Component.text(Main.getPrefix() + "§cAn error occurred while processing the command: " + e.getMessage()));
                     }
                 });
