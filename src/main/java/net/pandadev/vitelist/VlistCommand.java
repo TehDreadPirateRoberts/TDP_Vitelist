@@ -5,6 +5,8 @@ import com.google.gson.JsonParser;
 import com.velocitypowered.api.command.CommandSource;
 import com.velocitypowered.api.command.SimpleCommand;
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.event.ClickEvent;
+import net.kyori.adventure.text.event.HoverEvent;
 import org.spongepowered.configurate.ConfigurateException;
 
 import java.io.BufferedReader;
@@ -135,15 +137,15 @@ public class VlistCommand implements SimpleCommand {
                         int endIndex = Math.min(startIndex + playersPerPage, uuids.size());
                         List<String> pageUuids = uuids.subList(startIndex, endIndex);
 
-                        List<String> playerNames = new ArrayList<>();
+                        List<Component> playerNames = new ArrayList<>();
                         for (String uuid : pageUuids) {
                             playerNames.add(getNameFromUUID(uuid));
                         }
 
                         source.sendMessage(Component.text("§8----- [ §d§lVitelisted players §7(Page " + finalPage + "/" + totalPages + ") §8] -----"));
                         source.sendMessage(Component.text(""));
-                        for (String player : playerNames) {
-                            source.sendMessage(Component.text("§7" + player));
+                        for (Component player : playerNames) {
+                            source.sendMessage(player);
                         }
                         source.sendMessage(Component.text(""));
                         source.sendMessage(Component.text("§8--------------------------------"));
@@ -164,21 +166,30 @@ public class VlistCommand implements SimpleCommand {
         return root.node("whitelisted-uuids").getList(String.class);
     }
 
-    private String getNameFromUUID(String uuid) {
+    private Component getNameFromUUID(String uuid) {
         if (!isValidUUID(uuid)) {
             plugin.getLogger().warn("Invalid UUID format in whitelist: " + uuid);
-            return "Invalid UUID";
+            return Component.text("§c" + uuid)
+                    .clickEvent(ClickEvent.copyToClipboard(uuid))
+                    .hoverEvent(HoverEvent.showText(Component.text("Click to copy UUID")))
+                    .append(Component.text(" §8(§cINVALID§8)"));
         }
         try {
             URL url = new URL("https://playerdb.co/api/player/minecraft/" + uuid);
             String playerName = getPlayerNameFromAPI(url);
             if (playerName == null) {
-                return "§c" + uuid + " (ERROR)";
+                return Component.text("§c" + uuid)
+                        .clickEvent(ClickEvent.copyToClipboard(uuid))
+                        .hoverEvent(HoverEvent.showText(Component.text("Click to copy UUID")))
+                        .append(Component.text(" §8(§cERROR§8)"));
             }
-            return playerName;
+            return Component.text("§7" + playerName);
         } catch (Exception e) {
             plugin.getLogger().error("Failed to get player name for UUID: " + uuid, e);
-            return "§c" + uuid + " (ERROR)";
+            return Component.text("§c" + uuid)
+                    .clickEvent(ClickEvent.copyToClipboard(uuid))
+                    .hoverEvent(HoverEvent.showText(Component.text("Click to copy UUID")))
+                    .append(Component.text(" §8(§cERROR§8)"));
         }
     }
 
@@ -204,9 +215,6 @@ public class VlistCommand implements SimpleCommand {
         conn.setRequestMethod("GET");
         conn.connect();
         int responseCode = conn.getResponseCode();
-        if (responseCode == 400) {
-            return null;
-        }
         if (responseCode == 400) {
             return null;
         }
@@ -248,9 +256,9 @@ public class VlistCommand implements SimpleCommand {
                 uuids.add(uuid);
                 root.node("whitelisted-uuids").set(uuids);
                 plugin.getLoader().save(root);
-                source.sendMessage(Component.text(Main.getPrefix() + "§7Added §a" + getNameFromUUID(uuid) + " §7to the vitelist"));
+                source.sendMessage(Component.text(Main.getPrefix() + "§7Added §a").append(getNameFromUUID(uuid)).append(Component.text(" §7to the vitelist")));
             } else {
-                source.sendMessage(Component.text(Main.getPrefix() + "§a" + getNameFromUUID(uuid) + " §7is already on the vitelist"));
+                source.sendMessage(Component.text(Main.getPrefix() + "§a").append(getNameFromUUID(uuid)).append(Component.text(" §7is already on the vitelist")));
             }
         } catch (ConfigurateException e) {
             source.sendMessage(Component.text(Main.getPrefix() + "§cAn error occurred while processing the command: " + e.getMessage()));
@@ -265,9 +273,9 @@ public class VlistCommand implements SimpleCommand {
             if (uuids.remove(uuid)) {
                 root.node("whitelisted-uuids").set(uuids);
                 plugin.getLoader().save(root);
-                source.sendMessage(Component.text(Main.getPrefix() + "§7Removed §a" + getNameFromUUID(uuid) + " §7from the vitelist"));
+                source.sendMessage(Component.text(Main.getPrefix() + "§7Removed §a").append(getNameFromUUID(uuid)).append(Component.text(" §7from the vitelist")));
             } else {
-                source.sendMessage(Component.text(Main.getPrefix() + "§a" + getNameFromUUID(uuid) + " §7not found on the vitelist"));
+                source.sendMessage(Component.text(Main.getPrefix() + "§a").append(getNameFromUUID(uuid)).append(Component.text(" §7not found on the vitelist")));
             }
         } catch (ConfigurateException e) {
             source.sendMessage(Component.text(Main.getPrefix() + "§cAn error occurred while processing the command: " + e.getMessage()));
@@ -296,9 +304,12 @@ public class VlistCommand implements SimpleCommand {
             List<String> uuids = getWhitelistedUuids();
             List<String> playerNames = new ArrayList<>();
             for (String uuid : uuids) {
-                String playerName = getNameFromUUID(uuid);
-                if (playerName != null) {
-                    playerNames.add(playerName);
+                Component playerComponent = getNameFromUUID(uuid);
+                if (playerComponent.clickEvent() == null) {
+                    // A bit of a hack to get the plain text from the component for suggestions.
+                    // This is not ideal, but it's the simplest way without a serializer.
+                    String text = playerComponent.toString();
+                    playerNames.add(text.substring(text.indexOf("content=\"") + 9, text.length() - 2));
                 }
             }
             return playerNames;
