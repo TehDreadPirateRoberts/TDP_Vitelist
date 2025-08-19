@@ -51,13 +51,18 @@ public class VlistCommand implements SimpleCommand {
                     return;
                 }
                 CompletableFuture.runAsync(() -> {
+                    final String name = args[1];
                     try {
-                        String uuid = getUUID(args[1]);
-                        if (uuid != null) {
-                            addUuidToWhitelist(uuid, source);
-                        } else {
-                            source.sendMessage(Component.text(Main.getPrefix() + "§cCould not find UUID for player name"));
+                        String uuid = getUUID(name);
+                        if (uuid == null) {
+                            if (isValidUUID(name)) {
+                                uuid = name;
+                            } else {
+                                source.sendMessage(Component.text(Main.getPrefix() + "§cCould not find UUID for player name " + name));
+                                return;
+                            }
                         }
+                        addUuidToWhitelist(uuid, source);
                     } catch (Exception e) {
                         source.sendMessage(Component.text(Main.getPrefix() + "§cAn error occurred while processing the command: " + e.getMessage()));
                     }
@@ -72,17 +77,50 @@ public class VlistCommand implements SimpleCommand {
                     source.sendMessage(Component.text(Main.getPrefix() + "§cPlease specify a player name to remove"));
                     return;
                 }
+                final String name = args[1];
+                plugin.getLogger().info("[DEBUG] /vlist remove command initiated for '" + name + "'.");
+                plugin.getLogger().info("[DEBUG] Starting asynchronous task...");
                 CompletableFuture.runAsync(() -> {
                     try {
-                        String uuid = getUUID(args[1]);
-                        if (uuid != null) {
-                            removeUuidFromWhitelist(uuid, source);
+                        plugin.getLogger().info("[DEBUG] Asynchronous task started.");
+                        plugin.getLogger().info("[DEBUG] Getting UUID for '" + name + "'...");
+                        String uuid = getUUID(name);
+                        plugin.getLogger().info("[DEBUG] UUID received: " + uuid);
+
+                        if (uuid == null) {
+                            if (isValidUUID(name)) {
+                                uuid = name;
+                                plugin.getLogger().info("[DEBUG] Input is a valid UUID. Using it directly: " + uuid);
+                            } else {
+                                source.sendMessage(Component.text(Main.getPrefix() + "§cCould not find UUID for player name " + name));
+                                plugin.getLogger().info("[DEBUG] Could not find UUID and input is not a valid UUID. Aborting.");
+                                return;
+                            }
+                        }
+
+                        final String finalUuid = uuid;
+                        Component playerNameComponent = getNameFromUUID(finalUuid);
+
+                        plugin.getLogger().info("[DEBUG] Loading whitelist file...");
+                        var root = plugin.getLoader().load();
+                        plugin.getLogger().info("[DEBUG] Whitelist file loaded.");
+                        List<String> uuids = new ArrayList<>(root.node("whitelisted-uuids").getList(String.class));
+
+                        if (uuids.remove(finalUuid)) {
+                            plugin.getLogger().info("[DEBUG] UUID found and removed. Saving file...");
+                            root.node("whitelisted-uuids").set(uuids);
+                            plugin.getLoader().save(root);
+                            plugin.getLogger().info("[DEBUG] File saved.");
+                            source.sendMessage(Component.text(Main.getPrefix() + "§7Removed §a").append(playerNameComponent).append(Component.text(" §7from the vitelist")));
                         } else {
-                            source.sendMessage(Component.text(Main.getPrefix() + "§cCould not find UUID for player name"));
+                            plugin.getLogger().info("[DEBUG] UUID not found in whitelist.");
+                            source.sendMessage(Component.text(Main.getPrefix() + "§a").append(playerNameComponent).append(Component.text(" §7not found on the vitelist")));
                         }
                     } catch (Exception e) {
+                        plugin.getLogger().error("[DEBUG] An error occurred in the asynchronous task.", e);
                         source.sendMessage(Component.text(Main.getPrefix() + "§cAn error occurred while processing the command: " + e.getMessage()));
                     }
+                    plugin.getLogger().info("[DEBUG] Asynchronous task finished.");
                 });
                 break;
             case "on":
@@ -248,39 +286,27 @@ public class VlistCommand implements SimpleCommand {
     }
 
     private void addUuidToWhitelist(String uuid, CommandSource source) {
-        try {
-            var root = plugin.getLoader().load();
-            List<String> uuids = root.node("whitelisted-uuids").getList(String.class);
-            assert uuids != null;
-            if (!uuids.contains(uuid)) {
-                uuids.add(uuid);
-                root.node("whitelisted-uuids").set(uuids);
-                plugin.getLoader().save(root);
-                source.sendMessage(Component.text(Main.getPrefix() + "§7Added §a").append(getNameFromUUID(uuid)).append(Component.text(" §7to the vitelist")));
-            } else {
-                source.sendMessage(Component.text(Main.getPrefix() + "§a").append(getNameFromUUID(uuid)).append(Component.text(" §7is already on the vitelist")));
+        CompletableFuture.runAsync(() -> {
+            try {
+                Component playerNameComponent = getNameFromUUID(uuid);
+                var root = plugin.getLoader().load();
+                List<String> uuids = new ArrayList<>(root.node("whitelisted-uuids").getList(String.class));
+                if (!uuids.contains(uuid)) {
+                    uuids.add(uuid);
+                    root.node("whitelisted-uuids").set(uuids);
+                    plugin.getLoader().save(root);
+                    source.sendMessage(Component.text(Main.getPrefix() + "§7Added §a").append(playerNameComponent).append(Component.text(" §7to the vitelist")));
+                } else {
+                    source.sendMessage(Component.text(Main.getPrefix() + "§a").append(playerNameComponent).append(Component.text(" §7is already on the vitelist")));
+                }
+            } catch (ConfigurateException e) {
+                source.sendMessage(Component.text(Main.getPrefix() + "§cAn error occurred while processing the command: " + e.getMessage()));
             }
-        } catch (ConfigurateException e) {
-            source.sendMessage(Component.text(Main.getPrefix() + "§cAn error occurred while processing the command: " + e.getMessage()));
-        }
+        });
     }
 
-    private void removeUuidFromWhitelist(String uuid, CommandSource source) {
-        try {
-            var root = plugin.getLoader().load();
-            List<String> uuids = root.node("whitelisted-uuids").getList(String.class);
-            assert uuids != null;
-            if (uuids.remove(uuid)) {
-                root.node("whitelisted-uuids").set(uuids);
-                plugin.getLoader().save(root);
-                source.sendMessage(Component.text(Main.getPrefix() + "§7Removed §a").append(getNameFromUUID(uuid)).append(Component.text(" §7from the vitelist")));
-            } else {
-                source.sendMessage(Component.text(Main.getPrefix() + "§a").append(getNameFromUUID(uuid)).append(Component.text(" §7not found on the vitelist")));
-            }
-        } catch (ConfigurateException e) {
-            source.sendMessage(Component.text(Main.getPrefix() + "§cAn error occurred while processing the command: " + e.getMessage()));
-        }
-    }
+    // This method is no longer needed as the logic has been moved into the main execute block.
+    // private void removeUuidFromWhitelist(String uuid, CommandSource source) { ... }
 
     @Override
     public List<String> suggest(Invocation invocation) {
@@ -294,7 +320,7 @@ public class VlistCommand implements SimpleCommand {
         } else if (args.length == 2 && args[0].equalsIgnoreCase("add")) {
             return Stream.of("<player>").collect(Collectors.toList());
         } else if (args.length == 2 && args[0].equalsIgnoreCase("remove")) {
-            return getWhitelistedPlayerNames();
+            return Stream.of("<player/uuid>").collect(Collectors.toList());
         }
         return List.of();
     }
